@@ -1,0 +1,8 @@
+[theme]
+base = "light"
+primaryColor = "#0021A5"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F2F4F8"
+textColor = "#1A1A1A"
+
+# UF orange (#FA4616) is reserved for small accents, not text.
