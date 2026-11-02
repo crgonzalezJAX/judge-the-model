@@ -167,11 +167,18 @@ def threshold(res: dict, model: str) -> None:
 
 # ---- 3. Training vs. Test ------------------------------------------------------
 def train_vs_test(res: dict, model: str) -> None:
-    starter_note("training and test AUROC of every model, in a table.")
     s = m11.auroc_summary(res)
-    rows = [{"Model": m11.MODEL_LABEL[m], f"{TRAIN} AUROC": m11.fmt_num(v["train"]), f"{TEST} AUROC": m11.fmt_num(v["test"])}
+    train_count, test_count = st.columns(2)
+    train_count.metric("Training patients", f"{res['train']['n']:,}")
+    test_count.metric("Test patients", f"{res['test']['n']:,}")
+    st.write("Training results flatter every model because those patients were used to fit it. "
+             "Test AUROC measures how well a model ranks patients it never saw; it is the estimate to expect "
+             "on new patients. A larger Training minus Test gap can signal memorising the training patients.")
+    rows = [{"Model": m11.MODEL_LABEL[m], f"{TRAIN} AUROC": m11.fmt_num(v["train"]),
+             f"{TEST} AUROC": m11.fmt_num(v["test"]),
+             "Training − Test AUROC gap": m11.fmt_num(v["gap"])}
             for m, v in s.items()]
-    st.caption(f"{TRAIN} and {TEST} · AUROC on the rows each model learned from, and on rows it never saw")
+    st.caption("Training and Test AUROC comparison · gap = Training AUROC − Test AUROC")
     st.table(pd.DataFrame(rows).set_index("Model"))
 
 
