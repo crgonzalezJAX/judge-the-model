@@ -49,6 +49,7 @@ def test_confusion_table(c: dict) -> pd.DataFrame:
 
 
 def beyond_accuracy(res: dict, model: str) -> None:
+    st.info("Every number in this section uses a threshold of 0.50: a patient is flagged when their predicted probability is 50% or higher.")
     p, y = m11.preds(res, model)
     c = m11.confusion(p, y, 0.5)
     m = m11.metrics(c)
@@ -113,8 +114,9 @@ def beyond_accuracy(res: dict, model: str) -> None:
 # ---- 2. A Threshold for the Job ------------------------------------------------
 def threshold(res: dict, model: str) -> None:
     p, y = m11.preds(res, model)
-    selected = st.slider("Decision threshold", min_value=0.0, max_value=1.0,
+    selected = st.slider("Flag a patient when their predicted probability is at least:", min_value=0.0, max_value=1.0,
                          value=0.50, step=0.01, key="decision_threshold")
+    st.caption("This is the probability cutoff, not the sensitivity. A lower cutoff flags more patients and catches more cases. For the diabetes 90% sensitivity target, move the cutoff down.")
     current_c = m11.confusion(p, y, selected)
     reference_c = m11.confusion(p, y, 0.50)
     current_m = m11.metrics(current_c)
