@@ -40,12 +40,74 @@ def recommendations() -> None:
 
 
 # ---- 1. Beyond Accuracy ------------------------------------------------------
+def test_confusion_table(c: dict) -> pd.DataFrame:
+    return pd.DataFrame(
+        [[c["tp"], c["fn"]], [c["fp"], c["tn"]]],
+        index=["Actual positive", "Actual negative"],
+        columns=["Predicted positive", "Predicted negative"],
+    )
+
+
 def beyond_accuracy(res: dict, model: str) -> None:
-    starter_note("the four counts at threshold 0.50, and accuracy.")
     p, y = m11.preds(res, model)
     c = m11.confusion(p, y, 0.5)
-    st.caption(f"{TEST} · {m11.MODEL_LABEL[model]}, threshold 0.50")
-    st.table(pd.DataFrame([{**{k.upper(): v for k, v in c.items()}, "Accuracy": m11.fmt_pct(m11.metrics(c)["accuracy"])}]))
+    m = m11.metrics(c)
+    always_no = m11.metrics(m11.confusion([0.0 for _ in y], y, 0.5))
+    positive = {
+        "readmission": "readmitted within 30 days of discharge",
+        "diabetes": "doctor diagnosis of diabetes or HbA1c ≥ 6.5%",
+    }[res["dataset"]]
+
+    st.write(f"**Positive class:** patients with {positive}.")
+    st.caption(f"Test patients only · {m['n']:,} patients")
+    summary = st.columns(2)
+    summary[0].metric("Test prevalence", m11.fmt_pct(m["prevalence"]))
+    summary[1].metric("Test accuracy if we always predict no", m11.fmt_pct(always_no["accuracy"]))
+    st.write("Accuracy counts all correct predictions, including patients without the outcome. "
+             "Compare it with the always-no result before deciding whether a model helps find positive patients.")
+
+    st.subheader(f"Test · {m11.MODEL_LABEL[model]} at threshold 0.50")
+    st.write("A patient is predicted positive when the model probability is at least 0.50.")
+    st.caption("Test confusion matrix · rows: actual outcome; columns: predicted outcome; positives first")
+    st.table(test_confusion_table(c))
+    st.write(f"**True positives ({c['tp']:,}):** patients with the outcome who were flagged.  "
+             f"**False negatives ({c['fn']:,}):** patients with the outcome who were missed.  "
+             f"**False positives ({c['fp']:,}):** patients without the outcome who were flagged.  "
+             f"**True negatives ({c['tn']:,}):** patients without the outcome who were not flagged.")
+    st.write(f"**Test sensitivity (recall / TPR): {m11.fmt_pct(m['sensitivity'])}.** "
+             "Of the patients who had the outcome, this share was flagged.")
+    st.write(f"**Test specificity: {m11.fmt_pct(m['specificity'])}.** "
+             "Of the patients who did not have the outcome, this share was not flagged.")
+    st.write(f"**Test precision: {m11.fmt_pct(m['precision'])}.** "
+             "Of the patients who were flagged, this share had the outcome.")
+
+    st.subheader("Test · compare all five models at threshold 0.50")
+    rows = []
+    for name in m11.MODELS:
+        if name not in res["models"]:
+            continue
+        model_p, model_y = m11.preds(res, name)
+        values = m11.metrics(m11.confusion(model_p, model_y, 0.5))
+        rows.append({
+            "Model": m11.MODEL_LABEL[name],
+            "Accuracy": m11.fmt_pct(values["accuracy"]),
+            "Sensitivity / recall / TPR": m11.fmt_pct(values["sensitivity"]),
+            "Specificity": m11.fmt_pct(values["specificity"]),
+            "FPR": m11.fmt_pct(values["fpr"]),
+            "Precision": m11.fmt_pct(values["precision"]),
+            "F1": m11.fmt_pct(values["f1"]),
+        })
+    st.caption("Test metrics · one row per model · undefined means the denominator is zero")
+    st.table(pd.DataFrame(rows).set_index("Model"))
+
+    st.caption("Test confusion matrices · rows: actual outcome; columns: predicted outcome; positives first")
+    for name in m11.MODELS:
+        if name not in res["models"]:
+            continue
+        model_p, model_y = m11.preds(res, name)
+        counts = m11.confusion(model_p, model_y, 0.5)
+        st.markdown(f"**Test · {m11.MODEL_LABEL[name]} · threshold 0.50**")
+        st.table(test_confusion_table(counts))
 
 
 # ---- 2. A Threshold for the Job ------------------------------------------------
