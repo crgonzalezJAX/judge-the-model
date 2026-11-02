@@ -112,12 +112,57 @@ def beyond_accuracy(res: dict, model: str) -> None:
 
 # ---- 2. A Threshold for the Job ------------------------------------------------
 def threshold(res: dict, model: str) -> None:
-    starter_note("metrics at 0.50 only.")
     p, y = m11.preds(res, model)
-    m = m11.metrics(m11.confusion(p, y, 0.5))
-    st.caption(f"{TEST} · {m11.MODEL_LABEL[model]}, threshold 0.50")
-    st.table(pd.DataFrame([{"Sensitivity": m11.fmt_pct(m["sensitivity"]), "Specificity": m11.fmt_pct(m["specificity"]),
-                            "Precision": m11.fmt_pct(m["precision"]), "Flagged per 100": f"{m['flagged_per_100']:.1f}"}]))
+    selected = st.slider("Decision threshold", min_value=0.0, max_value=1.0,
+                         value=0.50, step=0.01, key="decision_threshold")
+    current_c = m11.confusion(p, y, selected)
+    reference_c = m11.confusion(p, y, 0.50)
+    current_m = m11.metrics(current_c)
+    reference_m = m11.metrics(reference_c)
+
+    def per_100(counts: dict, values: dict, count: str) -> str:
+        n = values["n"]
+        return "undefined" if n == 0 else f"{100 * counts[count] / n:.1f}"
+
+    st.caption(f"Test · {m11.MODEL_LABEL[model]} · threshold {selected:.2f}")
+    first, second = st.columns(2)
+    first.metric("Test patients flagged per 100", "undefined" if current_m["flagged_per_100"] is None
+                 else f"{current_m['flagged_per_100']:.1f}")
+    second.metric("Test false alarms per 100 patients", per_100(current_c, current_m, "fp"))
+    st.write("A false alarm is a patient without the outcome who is flagged for follow-up.")
+
+    st.caption(f"Test confusion matrix · threshold {selected:.2f} · rows: actual; columns: predicted; positives first")
+    st.table(test_confusion_table(current_c))
+
+    st.subheader("Test · threshold 0.50 compared with your choice")
+    def comparison_column(counts: dict, values: dict) -> dict:
+        return {
+            "Patients flagged per 100": "undefined" if values["flagged_per_100"] is None
+                                        else f"{values['flagged_per_100']:.1f}",
+            "False alarms per 100 patients": per_100(counts, values, "fp"),
+            "True positives": f"{counts['tp']:,}",
+            "False negatives": f"{counts['fn']:,}",
+            "False positives": f"{counts['fp']:,}",
+            "True negatives": f"{counts['tn']:,}",
+            "Sensitivity / recall": m11.fmt_pct(values["sensitivity"]),
+            "Specificity": m11.fmt_pct(values["specificity"]),
+            "Precision": m11.fmt_pct(values["precision"]),
+            "Accuracy": m11.fmt_pct(values["accuracy"]),
+        }
+
+    st.table(pd.DataFrame({"Test · reference 0.50": comparison_column(reference_c, reference_m),
+                           f"Test · your choice {selected:.2f}": comparison_column(current_c, current_m)}))
+    st.write("Lowering the threshold usually flags more patients, catching more positives and creating more false "
+             "alarms; raising it usually does the reverse. Moving this slider changes no model probability and "
+             "no AUROC: AUROC describes ranking across thresholds, not a decision at this threshold.")
+
+    if res["dataset"] == "diabetes":
+        sensitivity = current_m["sensitivity"]
+        status = "undefined" if sensitivity is None else ("meets" if sensitivity >= 0.90 else "does not meet")
+        st.info(f"Diabetes screening target: at least 90% Test sensitivity. At threshold {selected:.2f}, "
+                f"Test sensitivity is {m11.fmt_pct(sensitivity)}; this {status} the target.")
+    st.warning("You are choosing the threshold while looking at Test patients. Test sensitivity at a threshold "
+               "chosen this way is likely optimistic for new patients; it needs checking on fresh patients.")
 
 
 # ---- 3. Training vs. Test ------------------------------------------------------
